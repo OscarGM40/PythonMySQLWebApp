@@ -1,0 +1,328 @@
+					Aplicacion Web Flask & MySQL
+													
+Tmb vamos a usar Bootstrap y Js,aparte de Flask y MySQL.Crearemos una aplicacion de contactos, los cuales podremos insertar,eliminar modificar y visualizar.
+
+Creamos una carpeta y la arrastramos al IDE(VSC) 
+Instalaremos flask y el modulo flask-mysqldb 
+pip install flask flask-mysqldb (primero instalar sudo apt-get install python-mysqldb)Esto desde Linux
+
+dsde Windows  python3 -m pip install .\mysqlclient-1.4.6-cp38-cp38-win32.whl (hay que bajarse tu version correcta desde https://www.lfd.uci.edu/~gohlke/pythonlibs/#mysqlclient) 
+pip3 es el instalador para los paquetes de python3
+               
+			   Capturas de pantalla en Linux:
+ImprPant: guarda una captura de todo el escritorio en Imagenes
+ShifT+ImpPant:permite seleccionar un recorte
+alt+impPant: guarda la captura de la ventana activa
+Con CTRl+ 3 anteriores va al portapapeles en vez de a imagenes
+tmb se pueden hacer desde terminal con gnome o dsde terceros como gimp 
+                  
+				  Empezando con la Aplicacion
+					
+Importamos la clase Flask y la instanciamos.Con esa instancialevantamos el servidor con el metodo run,eso si hay que validar si el archivo(su __name__) es el principal(__main__).
+Es decir, si es el archivo app.py main.py etc
+app = Flask(__name__)
+if __name__ == "__main__":
+app.run(port = 3000, debug = True) 
+
+Esta vez le vamos a pasar un puerto ademas del booleano para autorefresh.
+Ya podemos ejecutarla desde cli con python(3) app.py.
+Dara not found pues el servidor envia un 404 por defecto 
+
+Creamos las rutas usando la funcion decorador @flask_instance.route(rule, *options).Debajo irá la función a la que este decorador queda atado,y a la cual vincula la URL que le pasamos.
+Rule es la ruta a esa URL, y en opciones puede ir el metodo,por defecto es GET,si queremos otro hay que ponerlo aqui.Tmb podemos pasar parametros en este segundo argumento a la funcion por aqui(<type:parameter_name>)
+La ruta tmb puede recibir una variable @app.route(/home/<user>)Ver API 
+ 
+#creamos una ruta para la Home 
+@app.route('/')
+def Index():  <- función vinculada al decorador
+    return 'Hello World'
+
+#ruta para agregar contactos
+@app.route('/add_contact')
+def add_contact():
+    return 'add contact'
+
+#ruta para editar contactos
+@app.route('/edit')
+def edit_contact():
+    return 'edit contact'
+
+#ruta para eliminar contactos
+@app.route('/delete')
+def delete_contact():
+    return 'delete contact'
+
+Una vez creadas las rutas,no es importante por ahora vamos a ir con la base de datos
+
+                       Base de datos MySQL con XAMPP
+					   
+Instalamos XAMPP o LAMP(el server Apache esta en /var/www/html/myarchivo)
+Desde un navegador usar 127.0.0.1/myAppName.extension 
+Parece que esta saliendo por el 80,tmb puede ser el 443
+sudo nano /var/www/html/info.php
+<?php
+phpinfo();
+?>
+sudo rm /var/www/html/info.php
+
+Para entrar a phpMyAdmin 127.0.0.1/phpMyAdmin
+
+Conectemonos desde Flask,primero habra que importar la clase MySQL 
+desde el modulo flask_mysqldb
+from flask_mysqldb import MySQL
+
+instanciamos la clase,sin embargo no valdra con mysql = MySQL() deberemos
+darle el User,La DDBB el password la IP...el puerto.Usaremos constantes y el 
+metodo config[String Constante].las constantes son MYSQL_HOST, MYSQL_USER,
+MYSQL_PASSWORD y MYSQL_DB
+
+app.config['MYSQL_HOST'] = 'localhost'
+app.config['MYSQL_USER'] ='root'
+app.config['MYSQL_PASSWORD'] ='******'
+app.config['MYSQL_DB'] ='flaskcontacts'
+Creamos la Base de Datos flaskcontacts cotejamineto utf_8_unicode_ci
+Creamos la tabla contacts con 4 columnas(id int autoincrement PK,
+fullname varchar 255, phone varchar 255, email varchar 255) guardamos la tabla
+
+Aun falta pasarle la configuracion que hemos creado,simplemente se pasa la instancia de la clase Flask(app),la cual ya tiene la config creada por el constructor de la clase MySQL al instanciar esta clase MysqL.
+
+mysql = MySQL(app)
+
+Tmb crearemos una sesion
+app.secret_key = 'loquequeramos' Esta clave secreta deberia ser random y ser lo más secreta posible.Por motivos didacticos usaremos cualquier cosa
+
+VSC:Preferencias Shorcuts puedo cambiar cualquier atajo. 
+
+                   Templates HTML
+
+Podemos crear un formulario en un HTML,pero tendremos que importar el método
+render_template (string url, optional parameters)desde el modulo flask para poder devolver archivos HTML al navegador desde el servidor.asimismo tenemos que crear una carpeta llamada 'templates' para estas vistas.Flask por defecto buscara los archivos .html en la carpeta templates,no se debe poner templates/index.html
+
+ @app.route('/')
+def Index():
+    return render_template('index.html',[optional parameters])
+
+No hay que decirle el nombre de la carpeta porque flask por defecto irá a  templates,si se pone da error.
+
+			Enviando datos(importar request)
+								
+Cada vez que enviemos un dato desde el formulario lo vamos a enviar a la ruta /add_contact. Esta ruta no tiene vista,solo recibe los datos y los envia a la BBDD desde aqui ,asi que vamos a configurar alguna cosa del metodo decorador route(string ruta, *options]). <- el metodo ya no va a ser GET, hay que pasarselo.
+
+Ademas usaremos el objeto request, hay que importarlo desde flask
+
+from flask import Flask, render_template, request
+
+@app.route('/add_contact', methods = ['POST'])
+	def add_contact():
+	# objeto request 
+	if request.method == 'POST':
+	request.form #form es un atributo del objeto request para rescatar values a traves del name -> request.form['name'] devuelve el  value
+	 fullname = request.form['fullname']
+	 phone = request.form['phone']
+	 email = request.form['email']
+	  print(fullname)
+        print(phone)
+        print(email)
+        return 'received'
+
+Fijarse como saldra por consola lo que viaja por el cuerpo de la petición.Con el atributo form podemos rescatar el value de un elemento HTML a traves de su name
+
+			Ingresar los datos en MySQL(Create/Insert)
+	 
+Vamos a usar un cursor virtual para posicionarnos en todo momento.Usaremos la funcion
+
+cur = mysql.connection.cursor() <= esta funcion devuelve el cursor. mysql es el objeto de clase MySQL que ya habiamos definido.
+Este cursor va a permitir ejecutar las consultas de MysqL(insert,select)
+ 
+cur.execute('INSERT INTO contacts(fullname,phone,email) VALUES (%s,%s,%s)',(fullname,phone,email)) 
+Recuerda en python (a,b,c) es una tupla de inmutables,lista con []
+Ambas estan indexadas.
+
+Para ejecutar esta consulta hay que hacerlo con el método commit(),ya que solo esta creada.
+mysql.connection.commit() <= es la que ejecuta la Query
+
+			Redireccionar(redirect, url_for)
+							
+Ya no nos vale para nada el return 'received' pues deberiamos reenviar
+al usuario a la vista principal('/'),en principio estamos en ella.Para ello vamos a necesitar dos funciones mas : redirect y url_for, las cuales son del modulo flask y hay que importar
+return redirect(url_for('Index')) <= Index es nuestro main.py,la Home
+
+                    Mensajes entre Vistas(funcion flash)
+					
+El modulo flask permite mandar mensajes entre vistas con la funcion flash().
+Hay que importarla.El mensaje lo recoge la siguiente request realizada(su ruta).Para recogerlo hay que usar get_flashed_messages().
+Como mensaje puede ir cualquier string o tmb de error,warning etc.Ver API
+
+											Motores de plantilla(jinja2)
+													
+Flask utiliza un motor de plantilla por defecto.Este motor se llama jinja2.De forma resumida,un motor de plantilla es HTML más nuevas características.Es decir,que aunque veamos HTML no es simplemente HTML, sino que es un motor de plantilla en el cual podemos realizar mas acciones que si fuera un simple HTML.tras la compilación todo se vuelve HTML de nuevo, asi que no hay de que preocuparse.En este caso no hay que cambiar la extension a los .html pero son archivos con jinja2, podemos usar sintaxis Python embebida cuando queramos en los HTML con Flask.
+
+Podremos utilizar if,for,.. Siempre va a ir todo dentro de {% codigo%}
+El codigo embebido será Python,en este caso,con JSP era Java,etc,segun 
+donde estemos.
+Lo primero es usar una funcion que devuelve los posibles mensajes flash que pueda recibir.
+Esta funcion devuelve un array o coleccion iterable,es la funcion get_flashed_messages() <- asi que habra que recorrer ese array
+Para declarar una variable debemos usar la keyword 'with'
+with casa, with myObject, with messages
+
+{%  with messages = get_flashed_messages() %} <- messages es un array
+{%  if messages %} <= no es == True,es que no sea null
+{% for message in messages%} <= usaremos un bucle for in de Python(el for of de JS o foreach de PHP,Java)
+Cualquier referencia desde HTML a Python va con dobles llaves
+<p>{{message}}</p> 
+{&endfor&}
+{%endif%} <= los if deben cerrarse
+{%endwith%} <= tmb se cierra la instancia de cualquier variable abierta con 'with'
+
+								SecretKey
+								
+Debajo de la conexion a MySQL,debemos tmb inicializar una sesion.Una sesion son simplemente datos que guarda la app en el servidor para despues poder reutilizarlos. Estos datos se pueden guardar en varios sitios,en una cookie,en la memoria de la aplicacion,en la memoria del navegador,del servidor.
+La forma mas basica es guardarlos dentro de la memoria de la aplicacion
+#settings
+app.secret_key = 'misecretkey' <- deberia ser algo realmente complicado,ojo!
+
+Esta propiedad lo que hace es decir como va a ir protegida nuestra sesion.Sólo por usarla,protegeremos la sesion tmb,que es lo que necesitamos
+
+						Listar los datos(Select/Read)
+						
+De momento solo hemos insertado datos,debemos leerlos tmb.podemos crear una tabla al lado del formulario. El HTML lo recibimos desde la funcion Index() la cual retornaba la render_template('index.html'),asi que podemos hacer una select y recojer la hastable y enviarla como segundo parametro del método render_template().
+Este metodo def Index()))es el que debera ejecutar la consulta a la BBDD
+
+cur = mysql.connection.cursor() <=obtenemos de nuevo el cursor
+
+tip:esta variable es de ámbito local,por eso la podemos llmar igual que la de otro método,son variables distintas
+
+cur.execute('SELECT * FROM contacts') <= falta ejecutarla
+Esta vez debemos almacenar la tabla recibida con el metodo fetchall en una variable,pues esta consulta si devuelve datos,no como la insert anterior
+
+data = cur.fetchall()
+
+print(data) podemos probar a ver que vemos por cli.
+Vemos que devuelve una tupla (1L, u'Oscar GM', u'34666666666', u'cursos@pesados.com') de la cual el indice 0(cero) no vamos a usar.Esto lo haremos desde el motor de plantilla jinja2(el index.html).
+tip. cuando tenemos una tupla podemos acceder con nombretupla.0 al valor del indice 0 de esa tupla.Para acceder a una tupla en una tupla de tuplas sise usan los corchetes tupla[0] <- acceder a la tupla 0 de varias.si usaramos tupla[0].0 accedemos a su id.
+
+Para pasarle esta hashtable se lo pasamos como segundo argumento del metodo render_template() la vamos a renombrar tmb(es necesario?)
+return render_template('index.html', contacts = data)
+
+Desde el html ya podemos usar sintaxis jinja2 para la variable hashtable: como contacts es una coleccion con colecciones la recorremos y de cada coleccion(contac) descartamos el campo 0(zero) porque no queremos mostrar el ID. 
+ <tbody>
+ {% for contact in contacts %}
+        <tr><td>{{contact.1}}</td>
+        <td>{{contact.2}}</td>
+        <td>{{contact.3}}</td>
+		<td> Enlaces a EDIT Y DELETE CON EL valor Id por la URL</td>
+		</tr>
+        
+        {% endfor %}
+</tbody>
+
+                                 Borrar(Delete)  datos
+						 
+Tmb vamos a borrar y modificar los datos.Para ello vamos a crear dos enlaces, los cuales redirigirán a /edit el que modificará y /delete el que los borrará.Ademas, deberan llevar el Id para saber hacer la select despues.Lo vamos a pasar asi,con un / en vez de ?.Esta vez si queremos el valor del campo 0 asi que será contact.0 (al iterar sobre contacts)
+
+            <a href="/edit/{{contact.0}}">Edit</a>
+            <a href="/delete/{{contact.0}}">Delete</a>
+
+Vamos al delete,en  la funcion decorador route vamos a pasar un parametro variable(ruta/<type:varname>).Estas variables despues las podemos usar en la funcion linkada al decorador simplemente recibiendolas por argumento en esa funcion:
+
+@app.route('/delete/<string:id>') 
+ def delete_contact(id):
+ cur = mysql.connection.cursor()
+ cur.execute('DELETE FROM contacts WHERE id={0}'.format(id))
+ 
+ Esto es una forma de hacer interpolacion en Python(alternativa a %s,%s):
+ Sintaxis: "string {0} ".format(var) <- Con %s,%s es valido tmb.
+ 
+ mysql.connection.commit() lo validamos
+ redirigimos al Index con un mensaje flash
+ flash('Ouyea que dificil fue')
+ return redirect(url_for('Index'))
+ 
+ Ya tenemos el eliminado vamos al Edit
+ 
+							Modificar(Update) datos
+							
+Lo más sencillo es crear otra vista,podria hacerse en la misma pero al parecer es dificil.Esta otra vista tendrá un formulario que realizará una select con ese id
+Esta es otra forma de recibir un parámetro,sin especificar el tipo del dato
+ 
+@app.route(/edit/<id>) <= no decimos el tipo
+   def get_contact(id):
+    cur = mysql.connection.cursor()
+    cur.execute('SELECT * FROM contacts WHERE id={0}'.format(id))
+    #Si usamos %s,%s en un string,despues habra otro segundo argumento con los valores,este argumento es una tupla:
+	"string con valores %s %s",(var1,var2)
+    cur.execute('SELECT * FROM contacts where id = %s', (id))
+    contact = cur.fetchall()
+	Esto recordemos que envia una tupla de tuplas.No nos hace falta mas que contacto.0 <= esto es la tupla del contacto 0 ,el unico que habra.
+
+Creemos la template para actualizar.Este archivo primero deberá recibir los datos
+ desde la funcion render_template,eso si solo necesitamos la posicion 0 de la tupla hastable.Accedemos asi tupla[indice] frutas[1] etc
+
+retunr render_template('actualizar.html', contact = contacto[0]) 
+
+Desde este archivo usando el atributo HTML value mostarmos los valores de la tupla con el contacto.Importante ,a traves del action vamos a pasar el campo ID
+<form action = "/update/{{contact.0}}" method= "POST">
+    <input type="text" name="fullname" value="{{contact.1}}">
+    <input type="text" name="phone" value="{{contact.2}}">
+    <input type="text" name="email" value="{{contact.3}}">
+    <button type="submit">Save</button>
+</form>
+
+Ya podemos crear una funcion que actualice los datos y despues nos envie a la index o lo que queramos
+
+                                    Update function
+
+tip: en el metodo execute(y en los demas¿?) podemos pasarle el string con comillas simples,dobles o triples,esto último se hace para usar varias lineas,ya que ayuda a la legibilidad del código
+
+Creamos  el decorador y  la funcion ligada
+app.route('/update/<id>', methods=['POST'])
+def update_contact(id):
+	if request.method == 'POST':
+		fullname = request.form['fullname']
+		phone = request.form['phone']
+        email = request.form['email']
+		cur = mysql.connection.cursor()
+		cur.execute("""UPDATE contacts SET
+		fullname = %s, phone=%s, email =%s 
+		WHERE Id=%s""",(fullname,phone,email,id))
+		mysql.connection.commit()
+		flash(''Contact Updated Successfully')
+		return redirect(url_for(''Index'))
+	
+	                      Heredando de una plantilla base en jinja2
+	
+Ya tendriamos terminao el CRUD totalmente funcional.Sin embargo vamos a añadir Bootstrap y darle mejor presentacion.En realidad vamos a usar Bootswatch.com.
+Este codigo lo podemos usar en la plantilla base,que aun no habiamos creado.En flask  irá en layout.html(puede ser otro nombre,pero siempre en templates si estamos en Flask),en esta plantilla debemos crear la zona a sobreescribir por las que implementen esta plantilla base y el codigo base.Con las instrucciones blockbody y endblock creamos la zona no heredable.El resto es comun entre las plantillas que la hereden:
+{% block body %}
+{% endblock %}
+
+Despues en los otros html debemos indicar que heredan esta plantilla,asi cmo que zona es propia suya con las anteriores instrucciones block body y endblock
+{% extends 'layout.html' %} <- para que usae la plantilla base
+{% block body %}
+codigo propio de este archivo
+{%end block %}
+
+                        Zona de los estáticos
+						
+Podemos crear una zona para archivos estáticos,como el favicon, imagenes, hojas de estilos,archivos de texto,json,...Esta zona se suele crear para hostear tu los archivos también.
+Para ello debemos crear la carpeta static(tiene que tener este nombre),despues en vez de usar una CDN subimos los archivos y despues los enlazamos con {{url_for('static', filename='css/main.css')}} La ruta empieza desde el archivo raiz parece (app.py)
+Ya que estamos usemoa UIGradients para darle un background
+
+                        Confirmacion del delete
+
+Por ultimo vamos a crear una confirmación para borrar un contacto y que no se borre directamente al pulsar.Creamos una carpeta en los estaticos llamada js y un archivo .js. Lo enlazamos desde la plantilla base
+  <script src="{{url_for('static',filename='javascript/main.js')}}"></script>
+  
+                Hosting para BBDD tipo SQL
+				
+CleverCloud es un servicio de hosting para aplicaciones de todo tipo (PHP,node,Java,Go,Ruby,...)Entre todas tmb permite crear un hosting gratuito para MySQL con una cadena de conexión que podemos crear en nuestras aplicaciones(es decir,que sólo hay que reemplazar tu cadena de conexión local)
+Vamos a https://www.clever-cloud.com/en/ y nos registramos free. Activamos el check y podemos obviar la ventana para dar más info a la cuenta
+
+Vamos a personal Space/Create(y damos en add-on)Veremos varias opciones,como mongoDb,MySQL.elegimos la opcion free dev (tip: retained es retenida,compartida,)
+La ponemos un nombre y ya nos dara el usuario,password,puerto,la cadena de conexion...
+Con la cadena de conexion para mysqli cli desde mysql por cli creamos la tabla(la bd ya nos la dieron).En el codigo deberemos cambiar todo la config,db,pass,user y la cadena de conexion por la base de datos remota. 
+Lo dejaré para otra aplicación
+Desde Clever Colud podemos cambiar cosas,hacer un backup,o eliminar todo,hay varias opciones.
+
+tip: PhpMyAdmin es un ciente de MySQL,cualquier interfaz que reproduzca MySQL es un cliente.
+  
